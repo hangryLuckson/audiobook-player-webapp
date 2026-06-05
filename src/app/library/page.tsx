@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth-server";
 import { listLibrary } from "@/lib/audiobooks-server";
 import { SignOutButton } from "@/components/SignOutButton";
+import { DeleteAudiobookButton } from "@/components/DeleteAudiobookButton";
 
 export const dynamic = "force-dynamic";
 
@@ -102,10 +103,10 @@ export default async function LibraryPage() {
                       ),
                     );
               return (
-                <li key={entry.playlist.sourceUrl}>
+                <li key={entry.playlist.sourceUrl} className="group relative">
                   <Link
                     href={`/player?url=${encodeURIComponent(entry.playlist.sourceUrl)}`}
-                    className="flex items-center gap-4 rounded-xl border border-border bg-surface/60 p-4 transition hover:bg-surface-elevated"
+                    className="flex items-center gap-4 rounded-xl border border-border bg-surface/60 p-4 pr-12 transition hover:bg-surface-elevated"
                   >
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-purple-500 text-white shadow">
                       <PlayIcon />
@@ -138,6 +139,12 @@ export default async function LibraryPage() {
                       </p>
                     </div>
                   </Link>
+                  <div className="absolute right-2 top-2">
+                    <DeleteAudiobookButton
+                      sourceUrl={entry.playlist.sourceUrl}
+                      title={entry.playlist.title}
+                    />
+                  </div>
                 </li>
               );
             })}

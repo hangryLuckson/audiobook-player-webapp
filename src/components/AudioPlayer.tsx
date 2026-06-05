@@ -70,6 +70,10 @@ export function AudioPlayer({
   const [isReady, setIsReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sleepTimerEndAt, setSleepTimerEndAt] = useState<number | null>(null);
+  const [sleepTimerSelected, setSleepTimerSelected] = useState<number | null>(null);
+  const [sleepRemaining, setSleepRemaining] = useState(0);
+  const [sleepPickerOpen, setSleepPickerOpen] = useState(false);
   const [resumeMessage, setResumeMessage] = useState<string | null>(
     initialProgress && initialProgress.timestamp > 0
       ? `Resumed chapter ${initialProgress.chapterIndex + 1} at ${formatTime(
@@ -257,6 +261,161 @@ export function AudioPlayer({
       });
     }
   }, [chapterIndex, isReady]);
+
+  useEffect(() => {
+    if (sleepTimerEndAt === null) {
+      setSleepRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remainingMs = sleepTimerEndAt - Date.now();
+      if (remainingMs <= 0) {
+        setSleepRemaining(0);
+        setSleepTimerEndAt(null);
+        const audio = audioRef.current;
+        if (audio && !audio.paused) {
+          audio.pause();
+        }
+        return;
+      }
+      setSleepRemaining(remainingMs);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [sleepTimerEndAt]);
+
+  useEffect(() => {
+    if (isPlaying && sleepTimerEndAt === null && sleepTimerSelected === null) {
+      const DEFAULT_MINUTES = 45;
+      setSleepTimerSelected(DEFAULT_MINUTES);
+      setSleepTimerEndAt(Date.now() + DEFAULT_MINUTES * 60_000);
+    }
+  }, [isPlaying, sleepTimerEndAt, sleepTimerSelected]);
+
+  function setSleepTimer(minutes: number | null) {
+    setSleepPickerOpen(false);
+    if (minutes === null) {
+      setSleepTimerEndAt(null);
+      setSleepTimerSelected(null);
+      setSleepRemaining(0);
+      return;
+    }
+    setSleepTimerSelected(minutes);
+    setSleepTimerEndAt(Date.now() + minutes * 60_000);
+  }
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateMetadata = () => {
+      if (typeof MediaMetadata === "undefined") return;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: chapterTitle,
+        artist: playlist.title,
+        album: `${playlist.title} · Chapter ${chapterIndex + 1} of ${totalChapters}`,
+        artwork: [
+          { src: "/icon", sizes: "192x192", type: "image/png" },
+        ],
+      });
+    };
+
+    const updatePosition = () => {
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate,
+          position: Math.min(audio.currentTime, audio.duration),
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const onPlay = () => {
+      navigator.mediaSession.playbackState = "playing";
+    };
+    const onPause = () => {
+      navigator.mediaSession.playbackState = "paused";
+    };
+
+    const handlePlay = () => audio.play().catch(() => {});
+    const handlePause = () => audio.pause();
+    const handleSeek = (details: MediaSessionActionDetails) => {
+      if (details.seekTime !== undefined && Number.isFinite(details.seekTime)) {
+        audio.currentTime = Math.max(0, details.seekTime);
+      }
+    };
+    const handleSeekTo = (details: MediaSessionActionDetails) => {
+      if (details.fastSeek && Number.isFinite(details.fastSeek)) {
+        const offset = details.fastSeek as unknown as number;
+        const target = (audio.currentTime ?? 0) + offset;
+        audio.currentTime = Math.max(0, target);
+      }
+    };
+    const handlePrev = () => {
+      if (chapterIndex > 0) {
+        wasPlayingRef.current = isPlayingRef.current;
+        setChapterIndex((i) => i - 1);
+      }
+    };
+    const handleNext = () => {
+      if (chapterIndex < totalChapters - 1) {
+        wasPlayingRef.current = isPlayingRef.current;
+        setChapterIndex((i) => i + 1);
+      }
+    };
+    const handleStop = () => {
+      audio.pause();
+    };
+
+    try {
+      navigator.mediaSession.setActionHandler("play", handlePlay);
+      navigator.mediaSession.setActionHandler("pause", handlePause);
+      navigator.mediaSession.setActionHandler("seekbackward", handleSeek);
+      navigator.mediaSession.setActionHandler("seekforward", handleSeek);
+      navigator.mediaSession.setActionHandler("seekto", handleSeekTo);
+      navigator.mediaSession.setActionHandler("previoustrack", handlePrev);
+      navigator.mediaSession.setActionHandler("nexttrack", handleNext);
+      navigator.mediaSession.setActionHandler("stop", handleStop);
+    } catch {
+      /* some browsers don't support all actions */
+    }
+
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("loadedmetadata", updatePosition);
+    audio.addEventListener("timeupdate", updatePosition);
+    audio.addEventListener("ratechange", updatePosition);
+    updateMetadata();
+    updatePosition();
+    navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
+
+    return () => {
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("loadedmetadata", updatePosition);
+      audio.removeEventListener("timeupdate", updatePosition);
+      audio.removeEventListener("ratechange", updatePosition);
+      try {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("seekbackward", null);
+        navigator.mediaSession.setActionHandler("seekforward", null);
+        navigator.mediaSession.setActionHandler("seekto", null);
+        navigator.mediaSession.setActionHandler("previoustrack", null);
+        navigator.mediaSession.setActionHandler("nexttrack", null);
+        navigator.mediaSession.setActionHandler("stop", null);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [chapterIndex, chapterTitle, playlist.title, playlist.sourceUrl, totalChapters]);
 
   function togglePlay() {
     const audio = audioRef.current;
@@ -476,6 +635,14 @@ export function AudioPlayer({
               ))}
             </div>
           </div>
+          <SleepTimerControl
+            isActive={sleepTimerEndAt !== null}
+            remainingMs={sleepRemaining}
+            isOpen={sleepPickerOpen}
+            onToggle={() => setSleepPickerOpen((v) => !v)}
+            onSelect={setSleepTimer}
+            selectedMinutes={sleepTimerSelected}
+          />
           <a
             href={currentChapter.url}
             target="_blank"
@@ -540,6 +707,134 @@ interface IconButtonProps {
   onClick: () => void;
   ariaLabel: string;
   children: React.ReactNode;
+}
+
+const SLEEP_OPTIONS = [15, 30, 45, 60, 90] as const;
+
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function SleepTimerControl({
+  isActive,
+  remainingMs,
+  isOpen,
+  onToggle,
+  onSelect,
+  selectedMinutes,
+}: {
+  isActive: boolean;
+  remainingMs: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (minutes: number | null) => void;
+  selectedMinutes: number | null;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function onDocClick(event: MouseEvent) {
+      if (!ref.current) return;
+      if (!ref.current.contains(event.target as Node)) {
+        onToggle();
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [isOpen, onToggle]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label="Sleep timer"
+        title="Sleep timer"
+        className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition ${
+          isActive
+            ? "border-brand-500/40 bg-brand-500/10 text-brand-200"
+            : "border-border text-foreground hover:bg-surface-elevated"
+        }`}
+      >
+        <MoonIcon />
+        {isActive ? formatCountdown(remainingMs) : "Sleep"}
+      </button>
+      {isOpen ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-md border border-border bg-surface-elevated shadow-2xl"
+        >
+          <div className="px-3 py-2 text-xs uppercase tracking-wide text-muted">
+            Stop after
+          </div>
+          {SLEEP_OPTIONS.map((minutes) => (
+            <button
+              key={minutes}
+              type="button"
+              onClick={() => onSelect(minutes)}
+              className={`flex w-full items-center justify-between px-3 py-2 text-sm transition ${
+                selectedMinutes === minutes && isActive
+                  ? "bg-brand-500/15 text-brand-200"
+                  : "text-foreground hover:bg-surface"
+              }`}
+            >
+              <span>{minutes} minutes</span>
+              {selectedMinutes === minutes && isActive ? (
+                <CheckIcon />
+              ) : null}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted transition hover:bg-surface hover:text-foreground"
+          >
+            <span>Turn off</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
 }
 
 function SaveStatusBadge({

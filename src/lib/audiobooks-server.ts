@@ -49,6 +49,29 @@ export async function upsertAudiobook(playlist: AudiobookPlaylist): Promise<void
   }
 }
 
+export async function deleteAudiobook(
+  sourceUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createAdminClient();
+  const { error: audioError } = await supabase
+    .from("audiobooks")
+    .delete()
+    .eq("source_url", sourceUrl);
+  if (audioError) {
+    console.error("Failed to delete audiobook", audioError);
+    return { ok: false, error: audioError.message };
+  }
+  const { error: progressError } = await supabase
+    .from("progress")
+    .delete()
+    .eq("url", sourceUrl);
+  if (progressError) {
+    console.error("Failed to delete progress", progressError);
+    return { ok: false, error: progressError.message };
+  }
+  return { ok: true };
+}
+
 export async function listLibrary(): Promise<LibraryEntry[]> {
   const supabase = createAdminClient();
 

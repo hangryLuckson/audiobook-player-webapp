@@ -1,13 +1,27 @@
 # Audiobook Player Web App
 
-Paste a URL of an audiobook page (HTML list of MP3/M4A/M4B files) or an M3U/M3U8 playlist and start listening. Chapters are extracted on the server, playback is handled in the browser, and progress is saved to Supabase so you can resume on any device.
+A single-user audiobook player. Paste a URL, listen with full controls, and your library + progress sync across every device you sign in on.
 
 ## Stack
 
 - Next.js 15 (App Router, TypeScript)
 - Tailwind CSS v4
-- Supabase (Google OAuth + Postgres for progress)
+- Supabase (Postgres for library + progress, service-role key for single-user access)
 - `cheerio` for server-side HTML parsing
+- Media Session API for OS-level playback controls
+
+## Features
+
+- **Library** — every audiobook you open is saved. Browse, resume, or delete from one place. The library is the default landing page.
+- **Cross-device sync** — chapter, timestamp, speed, and library entries are stored in Postgres. Open the same URL on another device and resume exactly where you left off.
+- **Sleep timer** — auto-starts at 45 minutes when you press play. Click the moon icon to pick 15/30/45/60/90 minutes or turn it off. When the timer ends, playback pauses.
+- **Full player controls** — play/pause, prev/next chapter, ±15s skip, scrub bar, speed (0.75–2x), chapter list.
+- **Auto-resume** — chapter, timestamp, and speed restore on reload.
+- **Reliable saves** — debounced 800ms save on every state change, plus `sendBeacon` on tab close/hide.
+- **Media Session integration** — the browser shows the current chapter in the OS media controls (lock screen, notification shade, headphones buttons) with play/pause/seek/next/prev.
+- **Audio proxy** — server-side re-streaming so audio works even when the source blocks hot-linking.
+- **SSRF protection** — the extractor pre-resolves hostnames and rejects private/loopback/link-local IPs, has a timeout, body cap, and manual redirect handling.
+- **Single-user password** — set `APP_PASSWORD` and you're done. No Supabase Auth rate limits, no OAuth dance.
 
 ## Setup
 
@@ -15,25 +29,40 @@ Paste a URL of an audiobook page (HTML list of MP3/M4A/M4B files) or an M3U/M3U8
    ```bash
    npm install
    ```
-2. Copy the env file and fill in your Supabase credentials:
+2. Copy the env file and fill in your values:
    ```bash
    cp .env.local.example .env.local
    ```
-3. Create the `progress` table in Supabase (SQL editor → New query):
+   You need:
+   - `NEXT_PUBLIC_SUPABASE_URL` — from Supabase Project Settings → API
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — same place
+   - `SUPABASE_SERVICE_ROLE_KEY` — same place (keep this secret, never expose to the browser)
+   - `APP_PASSWORD` — anything you want; this is the only login
+
+3. Run the SQL in Supabase (Project → SQL Editor → New query):
    ```bash
-   psql "$DATABASE_URL" -f supabase/schema.sql
-   # or paste the contents of supabase/schema.sql into the Supabase SQL editor
+   # paste the contents of supabase/schema.sql
    ```
-4. Enable Google auth in Supabase: Authentication → Providers → Google, and add `/auth/callback` to the redirect allow-list.
-5. Start the dev server:
+
+4. Start the dev server:
    ```bash
    npm run dev
    ```
 
+5. Open `http://localhost:3000`, sign in with `APP_PASSWORD`, paste an audiobook URL on `/add`, hit "Add".
+
+## Deploy to Vercel
+
+1. Push to GitHub: `git push origin main` (or use the GitHub web UI).
+2. Go to https://vercel.com/new and import the repo.
+3. In **Environment Variables**, add the same four values from `.env.local`.
+4. Deploy. Vercel gives you a URL like `https://audiobook-player-webapp-xxxx.vercel.app`. The first deploy takes ~1 minute; subsequent deploys are faster.
+
 ## How it works
 
-- The home page posts a URL to `/api/extract-mp3`. The route fetches the page server-side, parses it with `cheerio`, and returns a structured `AudiobookPlaylist`.
-- The playlist is encoded into the query string of `/player` so a single bookmark works for any audiobook.
-- `AudioPlayer` plays chapters sequentially, exposes play/pause, 15s skip, speed (0.75–2x), chapter nav, and a chapter list.
-- When signed in, every change is debounced-saved to Supabase via a server action; on `beforeunload` we flush the latest position.
-- When revisiting the same source URL, the player restores the chapter, timestamp, and speed automatically.
+- The home page is `/` and just redirects to `/library`. New audiobooks are added from `/add`.
+- `/api/extract-mp3` is server-side only and auth-gated. It fetches the page on the server, parses it with `cheerio`, and returns a structured `AudiobookPlaylist`.
+- The playlist is saved to the `audiobooks` table on first open and looked up by source URL thereafter. Player URLs are stable: `/player?url=<source>`.
+- Progress is debounced-saved to `progress` on every state change and flushed via `sendBeacon` on unload.
+- The sleep timer runs in a 1s interval, auto-starts at 45m on first play, and pauses the audio when it hits zero.
+- Media Session metadata is updated on chapter change so OS-level controls stay in sync.
