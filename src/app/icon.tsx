@@ -14,15 +14,55 @@ export default function Icon() {
           alignItems: "center",
           justifyContent: "center",
           background:
-            "linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%)",
-          borderRadius: 6,
-          color: "white",
-          fontSize: 18,
-          fontWeight: 700,
-          letterSpacing: -0.5,
+            "linear-gradient(135deg, #1e1040 0%, #312e81 60%, #1e1040 100%)",
+          borderRadius: 7,
         }}
       >
-        A
+        {/* Headband top arc */}
+        <div
+          style={{
+            position: "absolute",
+            top: 5,
+            left: 5,
+            width: 22,
+            height: 11,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              border: "2.5px solid white",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+        {/* Left earpiece */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 5,
+            left: 5,
+            width: 7,
+            height: 12,
+            borderRadius: 4,
+            background: "white",
+          }}
+        />
+        {/* Right earpiece */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 5,
+            right: 5,
+            width: 7,
+            height: 12,
+            borderRadius: 4,
+            background: "white",
+          }}
+        />
       </div>
     ),
     { ...size },

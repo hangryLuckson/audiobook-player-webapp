@@ -3,10 +3,12 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import type { AudiobookPlaylist, PlaybackSpeed, UserProgress } from "@/types";
 import { PLAYBACK_SPEEDS } from "@/types";
 import { saveProgress, beaconSaveProgress } from "@/lib/progress-client";
@@ -733,28 +735,71 @@ function SleepTimerControl({
   onSelect: (minutes: number | null) => void;
   selectedMinutes: number | null;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(
+    null,
+  );
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setMenuPos(null);
+      return;
+    }
+    const update = () => {
+      const btn = buttonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const menuWidth = Math.min(176, window.innerWidth - 16);
+      const desiredLeft = rect.right - menuWidth;
+      const left = Math.max(8, Math.min(desiredLeft, window.innerWidth - menuWidth - 8));
+      setMenuPos({ top: rect.bottom + 8, left });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-    function onDocClick(event: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(event.target as Node)) {
-        onToggle();
-      }
+    function onDocClick(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (wrapperRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      onToggle();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onToggle();
     }
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    document.addEventListener("touchstart", onDocClick, { passive: true });
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("touchstart", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [isOpen, onToggle]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={wrapperRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={onToggle}
         aria-label="Sleep timer"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
         title="Sleep timer"
-        className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition ${
+        className={`flex min-h-[2.25rem] items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
           isActive
             ? "border-brand-500/40 bg-brand-500/10 text-brand-200"
             : "border-border text-foreground hover:bg-surface-elevated"
@@ -763,40 +808,53 @@ function SleepTimerControl({
         <MoonIcon />
         {isActive ? formatCountdown(remainingMs) : "Sleep"}
       </button>
-      {isOpen ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-md border border-border bg-surface-elevated shadow-2xl"
-        >
-          <div className="px-3 py-2 text-xs uppercase tracking-wide text-muted">
-            Stop after
-          </div>
-          {SLEEP_OPTIONS.map((minutes) => (
-            <button
-              key={minutes}
-              type="button"
-              onClick={() => onSelect(minutes)}
-              className={`flex w-full items-center justify-between px-3 py-2 text-sm transition ${
-                selectedMinutes === minutes && isActive
-                  ? "bg-brand-500/15 text-brand-200"
-                  : "text-foreground hover:bg-surface"
-              }`}
+      {isOpen && menuPos && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{
+                position: "fixed",
+                top: menuPos.top,
+                left: menuPos.left,
+                width: Math.min(176, window.innerWidth - 16),
+              }}
+              className="z-50 overflow-hidden rounded-md border border-border bg-surface-elevated shadow-2xl"
             >
-              <span>{minutes} minutes</span>
-              {selectedMinutes === minutes && isActive ? (
-                <CheckIcon />
-              ) : null}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => onSelect(null)}
-            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted transition hover:bg-surface hover:text-foreground"
-          >
-            <span>Turn off</span>
-          </button>
-        </div>
-      ) : null}
+              <div className="border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                Stop after
+              </div>
+              {SLEEP_OPTIONS.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selectedMinutes === minutes && isActive}
+                  onClick={() => onSelect(minutes)}
+                  className={`flex min-h-[2.75rem] w-full items-center justify-between px-3 py-2 text-sm transition ${
+                    selectedMinutes === minutes && isActive
+                      ? "bg-brand-500/15 text-brand-200"
+                      : "text-foreground hover:bg-surface active:bg-surface"
+                  }`}
+                >
+                  <span>{minutes} minutes</span>
+                  {selectedMinutes === minutes && isActive ? (
+                    <CheckIcon />
+                  ) : null}
+                </button>
+              ))}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => onSelect(null)}
+                className="flex min-h-[2.75rem] w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted transition hover:bg-surface hover:text-foreground active:bg-surface"
+              >
+                <span>Turn off</span>
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
