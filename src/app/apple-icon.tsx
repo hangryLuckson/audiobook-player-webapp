@@ -31,7 +31,6 @@ export default function AppleIcon() {
               "radial-gradient(ellipse at 50% 30%, rgba(99,102,241,0.25) 0%, transparent 60%)",
           }}
         />
-        {/* Headband top arc */}
         <div
           style={{
             position: "absolute",
@@ -40,6 +39,7 @@ export default function AppleIcon() {
             width: 140,
             height: 70,
             overflow: "hidden",
+            display: "flex",
           }}
         >
           <div
@@ -52,7 +52,6 @@ export default function AppleIcon() {
             }}
           />
         </div>
-        {/* Left earpiece */}
         <div
           style={{
             position: "absolute",
@@ -62,10 +61,8 @@ export default function AppleIcon() {
             height: 72,
             borderRadius: 23,
             background: "white",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
         />
-        {/* Right earpiece */}
         <div
           style={{
             position: "absolute",
@@ -75,10 +72,8 @@ export default function AppleIcon() {
             height: 72,
             borderRadius: 23,
             background: "white",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
         />
-        {/* Sound waves from right */}
         <div
           style={{
             position: "absolute",

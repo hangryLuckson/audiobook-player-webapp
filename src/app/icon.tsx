@@ -18,7 +18,6 @@ export default function Icon() {
           borderRadius: 7,
         }}
       >
-        {/* Headband top arc */}
         <div
           style={{
             position: "absolute",
@@ -27,6 +26,7 @@ export default function Icon() {
             width: 22,
             height: 11,
             overflow: "hidden",
+            display: "flex",
           }}
         >
           <div
@@ -39,7 +39,6 @@ export default function Icon() {
             }}
           />
         </div>
-        {/* Left earpiece */}
         <div
           style={{
             position: "absolute",
@@ -51,7 +50,6 @@ export default function Icon() {
             background: "white",
           }}
         />
-        {/* Right earpiece */}
         <div
           style={{
             position: "absolute",
