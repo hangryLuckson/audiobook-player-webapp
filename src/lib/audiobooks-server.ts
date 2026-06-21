@@ -18,7 +18,7 @@ export async function loadAudiobook(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("audiobooks")
-    .select("source_url, title, chapters")
+    .select("source_url, title, chapters, cover_image_url")
     .eq("source_url", sourceUrl)
     .maybeSingle();
   if (error || !data) return null;
@@ -30,6 +30,7 @@ export async function loadAudiobook(
     sourceUrl: data.source_url,
     title: data.title,
     chapters,
+    coverImageUrl: data.cover_image_url ?? null,
   };
 }
 
@@ -40,6 +41,7 @@ export async function upsertAudiobook(playlist: AudiobookPlaylist): Promise<void
       source_url: playlist.sourceUrl,
       title: playlist.title,
       chapters: playlist.chapters,
+      cover_image_url: playlist.coverImageUrl ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "source_url" },
@@ -78,7 +80,7 @@ export async function listLibrary(): Promise<LibraryEntry[]> {
   const [audioRes, progressRes] = await Promise.all([
     supabase
       .from("audiobooks")
-      .select("source_url, title, chapters, updated_at")
+      .select("source_url, title, chapters, cover_image_url, updated_at")
       .order("updated_at", { ascending: false }),
     supabase
       .from("progress")
@@ -113,6 +115,7 @@ export async function listLibrary(): Promise<LibraryEntry[]> {
         sourceUrl: row.source_url,
         title: row.title,
         chapters,
+        coverImageUrl: row.cover_image_url ?? null,
       };
       return {
         playlist,

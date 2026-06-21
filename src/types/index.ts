@@ -7,6 +7,7 @@ export interface AudiobookPlaylist {
   sourceUrl: string;
   title: string;
   chapters: M3ULink[];
+  coverImageUrl?: string | null;
 }
 
 export interface UserProgress {

@@ -8,6 +8,7 @@ const PROGRESS_ENDPOINT = "/api/progress";
 export interface FullProgressInput extends SaveProgressInput {
   title?: string;
   chapters?: M3ULink[];
+  coverImageUrl?: string | null;
 }
 
 export async function saveProgress(input: FullProgressInput): Promise<boolean> {

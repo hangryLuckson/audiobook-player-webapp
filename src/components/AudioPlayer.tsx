@@ -106,6 +106,7 @@ export function AudioPlayer({
         url: playlist.sourceUrl,
         title: playlist.title,
         chapters: playlist.chapters,
+        coverImageUrl: playlist.coverImageUrl ?? null,
         chapterIndex: chapter,
         timestamp,
         speed: playbackSpeed,
@@ -119,7 +120,7 @@ export function AudioPlayer({
         setSaveError("Could not save progress. Check the browser console.");
       }
     },
-    [playlist.sourceUrl, playlist.title, playlist.chapters],
+    [playlist.sourceUrl, playlist.title, playlist.chapters, playlist.coverImageUrl],
   );
 
   useEffect(() => {
@@ -162,6 +163,7 @@ export function AudioPlayer({
         url: playlist.sourceUrl,
         title: playlist.title,
         chapters: playlist.chapters,
+        coverImageUrl: playlist.coverImageUrl ?? null,
         chapterIndex: chapterIndexRef.current,
         timestamp: audio?.currentTime ?? 0,
         speed: audio?.playbackRate ?? speedRef.current,
@@ -175,7 +177,7 @@ export function AudioPlayer({
       window.removeEventListener("beforeunload", onUnload);
       document.removeEventListener("visibilitychange", onHide);
     };
-  }, [playlist.sourceUrl, playlist.title, playlist.chapters]);
+  }, [playlist.sourceUrl, playlist.title, playlist.chapters, playlist.coverImageUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -316,13 +318,20 @@ export function AudioPlayer({
 
     const updateMetadata = () => {
       if (typeof MediaMetadata === "undefined") return;
+      const artwork: MediaImage[] = [];
+      if (playlist.coverImageUrl) {
+        artwork.push({
+          src: playlist.coverImageUrl,
+          sizes: "512x512",
+          type: "image/png",
+        });
+      }
+      artwork.push({ src: "/icon", sizes: "192x192", type: "image/png" });
       navigator.mediaSession.metadata = new MediaMetadata({
         title: chapterTitle,
         artist: playlist.title,
         album: `${playlist.title} · Chapter ${chapterIndex + 1} of ${totalChapters}`,
-        artwork: [
-          { src: "/icon", sizes: "192x192", type: "image/png" },
-        ],
+        artwork,
       });
     };
 
@@ -348,16 +357,39 @@ export function AudioPlayer({
 
     const handlePlay = () => audio.play().catch(() => {});
     const handlePause = () => audio.pause();
-    const handleSeek = (details: MediaSessionActionDetails) => {
-      if (details.seekTime !== undefined && Number.isFinite(details.seekTime)) {
-        audio.currentTime = Math.max(0, details.seekTime);
+    const asSeekOffset = (details: MediaSessionActionDetails): number | null => {
+      if (
+        details.seekOffset !== undefined &&
+        Number.isFinite(details.seekOffset)
+      ) {
+        return details.seekOffset;
+      }
+      if (
+        details.seekTime !== undefined &&
+        Number.isFinite(details.seekTime)
+      ) {
+        return details.seekTime - audio.currentTime;
+      }
+      return null;
+    };
+    const handleSeekBackward = (details: MediaSessionActionDetails) => {
+      const offset = asSeekOffset(details);
+      if (offset !== null) {
+        audio.currentTime = Math.max(0, audio.currentTime + offset);
+      }
+    };
+    const handleSeekForward = (details: MediaSessionActionDetails) => {
+      const offset = asSeekOffset(details);
+      if (offset !== null) {
+        audio.currentTime = Math.min(
+          offset + audio.currentTime,
+          audio.duration || Infinity,
+        );
       }
     };
     const handleSeekTo = (details: MediaSessionActionDetails) => {
-      if (details.fastSeek && Number.isFinite(details.fastSeek)) {
-        const offset = details.fastSeek as unknown as number;
-        const target = (audio.currentTime ?? 0) + offset;
-        audio.currentTime = Math.max(0, target);
+      if (details.seekTime !== undefined && Number.isFinite(details.seekTime)) {
+        audio.currentTime = Math.max(0, details.seekTime);
       }
     };
     const handlePrev = () => {
@@ -379,8 +411,8 @@ export function AudioPlayer({
     try {
       navigator.mediaSession.setActionHandler("play", handlePlay);
       navigator.mediaSession.setActionHandler("pause", handlePause);
-      navigator.mediaSession.setActionHandler("seekbackward", handleSeek);
-      navigator.mediaSession.setActionHandler("seekforward", handleSeek);
+      navigator.mediaSession.setActionHandler("seekbackward", handleSeekBackward);
+      navigator.mediaSession.setActionHandler("seekforward", handleSeekForward);
       navigator.mediaSession.setActionHandler("seekto", handleSeekTo);
       navigator.mediaSession.setActionHandler("previoustrack", handlePrev);
       navigator.mediaSession.setActionHandler("nexttrack", handleNext);
@@ -417,7 +449,7 @@ export function AudioPlayer({
         /* ignore */
       }
     };
-  }, [chapterIndex, chapterTitle, playlist.title, playlist.sourceUrl, totalChapters]);
+  }, [chapterIndex, chapterTitle, playlist.title, playlist.sourceUrl, playlist.coverImageUrl, totalChapters]);
 
   function togglePlay() {
     const audio = audioRef.current;
@@ -538,6 +570,17 @@ export function AudioPlayer({
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="rounded-2xl border border-border bg-surface/70 p-6 shadow-xl backdrop-blur">
+        {playlist.coverImageUrl ? (
+          <div className="mb-6 overflow-hidden rounded-xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={playlist.coverImageUrl}
+              alt="Cover"
+              className="mx-auto block max-h-64 w-full rounded-xl object-cover shadow-lg"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        ) : null}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-muted">

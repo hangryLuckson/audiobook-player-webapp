@@ -6,6 +6,7 @@ create table if not exists public.audiobooks (
   source_url text primary key,
   title text not null,
   chapters jsonb not null,
+  cover_image_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

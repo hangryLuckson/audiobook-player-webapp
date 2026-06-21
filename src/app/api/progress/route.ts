@@ -12,6 +12,7 @@ interface ProgressPayload {
   speed?: unknown;
   title?: unknown;
   chapters?: unknown;
+  coverImageUrl?: unknown;
 }
 
 function asNumber(value: unknown): number | null {
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
   const chapters = Array.isArray(body.chapters)
     ? (body.chapters as M3ULink[])
     : null;
+  const coverImageUrl = asString(body.coverImageUrl);
   const now = new Date().toISOString();
 
   const supabase = createAdminClient();
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
         source_url: url,
         title,
         chapters,
+        cover_image_url: coverImageUrl ?? undefined,
         updated_at: now,
       },
       { onConflict: "source_url" },

@@ -108,9 +108,19 @@ export default async function LibraryPage() {
                     href={`/player?url=${encodeURIComponent(entry.playlist.sourceUrl)}`}
                     className="flex items-center gap-4 rounded-xl border border-border bg-surface/60 p-4 pr-12 transition hover:bg-surface-elevated"
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-purple-500 text-white shadow">
-                      <PlayIcon />
-                    </div>
+                    {entry.playlist.coverImageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={entry.playlist.coverImageUrl}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover shadow"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-purple-500 text-white shadow">
+                        <PlayIcon />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base font-semibold text-foreground">
                         {entry.playlist.title}

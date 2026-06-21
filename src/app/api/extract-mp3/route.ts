@@ -290,6 +290,21 @@ function deriveTitle($: CheerioDoc, fallback: string): string {
   );
 }
 
+function deriveCoverImageUrl($: CheerioDoc): string | null {
+  const raw =
+    $('meta[property="og:image"]').attr("content")?.trim() ||
+    $('meta[name="twitter:image"]').attr("content")?.trim() ||
+    null;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function extractFromSource(
   sourceUrl: string,
 ): Promise<AudiobookPlaylist> {
@@ -311,6 +326,7 @@ async function extractFromSource(
     sourceUrl: finalUrl,
     title: deriveTitle($, base.hostname),
     chapters,
+    coverImageUrl: deriveCoverImageUrl($),
   };
 }
 
